@@ -1,0 +1,13 @@
+# Normalise line endings.
+# Development happens on Windows (CRLF); Docker containers run Linux (LF).
+# Without this, shell scripts committed from Windows fail inside the container
+# with "bad interpreter: no such file or directory".
+* text=auto eol=lf
+
+# Binary files must never be converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

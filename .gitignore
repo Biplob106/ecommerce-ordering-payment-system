@@ -1,0 +1,31 @@
+# ---- Dependencies ----
+node_modules/
+
+# ---- Build output ----
+dist/
+build/
+.next/
+out/
+
+# ---- Environment / secrets ----
+# .env holds real API keys and DB passwords. NEVER commit it.
+# .env.example is committed on purpose: it documents which keys exist,
+# with placeholder values only.
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ---- Logs ----
+*.log
+logs/
+npm-debug.log*
+
+# ---- Tests ----
+coverage/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
