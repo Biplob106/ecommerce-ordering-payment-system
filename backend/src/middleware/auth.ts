@@ -28,6 +28,25 @@ export const authenticate = (
 };
 
 /**
+ * Attaches `req.user` when a valid token is present, but does NOT reject the
+ * request when it is missing. Used on public routes that behave differently for
+ * logged-in users (e.g. admins seeing inactive products in the catalogue).
+ */
+export const optionalAuthenticate = (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void => {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    const token = header.slice('Bearer '.length).trim();
+    const payload = verifyAccessToken(token);
+    req.user = { id: payload.sub, role: payload.role };
+  }
+  next();
+};
+
+/**
  * Requires the authenticated user to hold one of the given roles.
  * Must run after `authenticate`.
  *
