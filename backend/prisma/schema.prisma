@@ -1,0 +1,133 @@
+// Prisma schema for the e-commerce ordering & payment system.
+//
+// Conventions:
+//   - IDs are cuid() strings: URL-safe, non-guessable, no integer enumeration.
+//   - All money is stored as Int in MINOR units (cents / poisha) with a
+//     separate currency string. Never floats. Matches the Stripe and bKash
+//     APIs, which both transact in minor units.
+//   - Order lines snapshot the product name and unit price at checkout so
+//     later product edits never rewrite historical orders.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FULFILLED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  BKASH
+}
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  passwordHash String
+  name         String
+  role         Role    @default(CUSTOMER)
+
+  orders        Order[]
+  refreshTokens RefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String
+  description String
+  priceAmount Int // minor units
+  currency    String
+  stock       Int
+  active      Boolean @default(true)
+
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  status      OrderStatus @default(PENDING)
+  totalAmount Int // minor units, sum of item snapshots
+  currency    String
+
+  items    OrderItem[]
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  productName String // snapshot at checkout
+  unitPrice   Int // snapshot, minor units
+  quantity    Int
+
+  @@index([orderId])
+}
+
+model Payment {
+  id          String          @id @default(cuid())
+  orderId     String
+  order       Order           @relation(fields: [orderId], references: [id])
+  provider    PaymentProvider
+  status      PaymentStatus   @default(PENDING)
+  amount      Int // minor units
+  currency    String
+  providerRef String? // external id (Stripe PaymentIntent, bKash paymentID)
+  metadata    Json? // raw provider payload
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([providerRef])
+}
