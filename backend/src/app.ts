@@ -2,6 +2,9 @@ import express, { type Application, type Request, type Response } from 'express'
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
+import { env, corsOrigins } from './config/env';
+import { apiRouter } from './routes';
+import { errorHandler, notFoundHandler } from './middleware/error';
 
 /**
  * Builds the Express application.
@@ -28,14 +31,9 @@ export const createApp = (): Application => {
   // Allow the Next.js frontend to call this API from another origin.
   // The allow-list comes from configuration; `credentials` permits the
   // browser to send the Authorization header on cross-origin requests.
-  const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
   app.use(
     cors({
-      origin: allowedOrigins,
+      origin: corsOrigins,
       credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     }),
@@ -64,6 +62,15 @@ export const createApp = (): Application => {
       },
     });
   });
+
+  // Feature routes live under the configured API prefix (default /api/v1).
+  app.use(env.API_PREFIX, apiRouter);
+
+  // Unmatched routes -> 404, then the central error handler. Both MUST come
+  // last: the error handler is Express's four-argument sink for everything
+  // thrown or forwarded above.
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 };
