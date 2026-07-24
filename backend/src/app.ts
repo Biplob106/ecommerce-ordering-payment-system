@@ -1,0 +1,69 @@
+import express, { type Application, type Request, type Response } from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
+import compression from 'compression';
+
+/**
+ * Builds the Express application.
+ *
+ * This module deliberately does NOT start an HTTP server — it only assembles
+ * middleware and routes and returns the app. `server.ts` owns the listener.
+ *
+ * Keeping them apart means the test suite can import this app and issue
+ * requests against it in-process, with no port bound and no chance of two
+ * test files colliding on the same port.
+ */
+export const createApp = (): Application => {
+  const app = express();
+
+  // Trust the first proxy hop so req.ip and req.protocol reflect the real
+  // client when running behind ngrok, a load balancer or a reverse proxy.
+  app.set('trust proxy', 1);
+
+  // Removes the `X-Powered-By: Express` header, which otherwise advertises
+  // the framework to anyone probing the API, and sets a baseline of security
+  // headers (HSTS, X-Content-Type-Options, frame options, and others).
+  app.use(helmet());
+
+  // Allow the Next.js frontend to call this API from another origin.
+  // The allow-list comes from configuration; `credentials` permits the
+  // browser to send the Authorization header on cross-origin requests.
+  const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  app.use(
+    cors({
+      origin: allowedOrigins,
+      credentials: true,
+      methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    }),
+  );
+
+  // gzip responses over ~1 KB.
+  app.use(compression());
+
+  // Parse JSON request bodies into `req.body`.
+  // The size limit caps how much a single request can force the process to
+  // buffer in memory.
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+  /**
+   * Liveness probe. Used by Docker health checks and load balancers to decide
+   * whether this process is alive and should receive traffic.
+   */
+  app.get('/health', (_req: Request, res: Response) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        status: 'ok',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+      },
+    });
+  });
+
+  return app;
+};

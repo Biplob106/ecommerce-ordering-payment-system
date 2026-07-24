@@ -10,11 +10,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "compression": "^1.8.1",
+    "cors": "^2.8.6",
     "dotenv": "^16.4.7",
     "express": "^5.0.1",
+    "helmet": "^8.3.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.7",
     "tsx": "^4.19.2",
