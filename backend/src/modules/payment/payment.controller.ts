@@ -2,7 +2,11 @@ import type { Request, Response } from 'express';
 import { corsOrigins } from '../../config/env';
 import { AppError } from '../../utils/AppError';
 import * as paymentService from './payment.service';
-import { initiatePaymentSchema, bkashCallbackSchema } from './payment.schema';
+import {
+  initiatePaymentSchema,
+  bkashCallbackSchema,
+  refundSchema,
+} from './payment.schema';
 
 /**
  * HTTP layer for payments.
@@ -66,4 +70,17 @@ export const bkashCallback = async (
   const { paymentID, status } = bkashCallbackSchema.parse(req.query);
   const result = await paymentService.handleBkashCallback(paymentID, status);
   res.redirect(frontendResultUrl(result.status, result.orderId));
+};
+
+/**
+ * Admin-only. Refunds a paid order back through its original provider and
+ * returns the updated order.
+ */
+export const refund = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const { orderId } = refundSchema.parse(req.body);
+  const order = await paymentService.refundOrder(orderId);
+  res.status(200).json({ success: true, data: { order } });
 };

@@ -32,6 +32,12 @@ export interface BkashExecuteResult {
   raw: unknown;
 }
 
+export interface BkashRefundResult {
+  success: boolean;
+  refundRef?: string; // bKash refund trxID
+  raw: unknown;
+}
+
 const toMajorUnits = (minor: number): string => (minor / 100).toFixed(2);
 
 // --- token cache -----------------------------------------------------------
@@ -171,4 +177,48 @@ export const executeBkashPayment = async (
 
   const success = res.ok && body.transactionStatus === 'Completed';
   return { success, trxID: body.trxID, raw: body };
+};
+
+/**
+ * Refunds a completed bKash transaction. bKash requires both the original
+ * paymentID and its trxID, plus the amount as a major-unit string. A refund
+ * status of "Completed" is the only success.
+ */
+export const refundBkashPayment = async (
+  paymentID: string,
+  trxID: string,
+  amountMinorUnits: number,
+): Promise<BkashRefundResult> => {
+  if (env.BKASH_MOCK) {
+    return {
+      success: true,
+      refundRef: `MOCK-REFUND-${trxID}`,
+      raw: { refundTrxID: `MOCK-REFUND-${trxID}`, transactionStatus: 'Completed' },
+    };
+  }
+
+  const token = await grantToken();
+  const res = await fetch(
+    `${env.BKASH_BASE_URL}/tokenized/checkout/payment/refund`,
+    {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        paymentID,
+        trxID,
+        amount: toMajorUnits(amountMinorUnits),
+        sku: paymentID,
+        reason: 'Order refund',
+      }),
+    },
+  );
+
+  const body = (await res.json()) as {
+    refundTrxID?: string;
+    transactionStatus?: string;
+    statusMessage?: string;
+  };
+
+  const success = res.ok && body.transactionStatus === 'Completed';
+  return { success, refundRef: body.refundTrxID, raw: body };
 };

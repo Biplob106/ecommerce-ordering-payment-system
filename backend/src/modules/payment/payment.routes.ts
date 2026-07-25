@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
-import { authenticate } from '../../middleware/auth';
+import { authenticate, authorize } from '../../middleware/auth';
 import * as paymentController from './payment.controller';
 
 /**
  * Payment routes, mounted at `<API_PREFIX>/payments`.
  *
  *   POST /                  start a payment for one of your orders (auth)
+ *   POST /refund            refund a paid order (admin only)
  *   POST /stripe/webhook    Stripe event sink (public, signature-verified)
  *   GET  /bkash/callback    bKash redirect target (public)
  *
@@ -22,6 +23,12 @@ import * as paymentController from './payment.controller';
 export const paymentRouter = Router();
 
 paymentRouter.post('/', authenticate, asyncHandler(paymentController.initiate));
+paymentRouter.post(
+  '/refund',
+  authenticate,
+  authorize('ADMIN'),
+  asyncHandler(paymentController.refund),
+);
 paymentRouter.post(
   '/stripe/webhook',
   asyncHandler(paymentController.stripeWebhook),

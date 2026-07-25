@@ -22,5 +22,11 @@ export const bkashCallbackSchema = z.object({
   status: z.string().min(1),
 });
 
+/** Refunding names the order to refund; the amount comes from its payment. */
+export const refundSchema = z.object({
+  orderId: z.string().min(1),
+});
+
 export type InitiatePaymentInput = z.infer<typeof initiatePaymentSchema>;
 export type BkashCallbackQuery = z.infer<typeof bkashCallbackSchema>;
+export type RefundInput = z.infer<typeof refundSchema>;

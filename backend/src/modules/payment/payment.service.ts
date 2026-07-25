@@ -8,14 +8,19 @@ import {
 import { prisma } from '../../lib/prisma';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/AppError';
-import { getOrderForUser } from '../order/order.service';
+import {
+  getOrderForUser,
+  type OrderWithRelations,
+} from '../order/order.service';
 import {
   createStripePayment,
+  refundStripePayment,
   verifyStripeWebhook,
 } from './providers/stripe.provider';
 import {
   createBkashPayment,
   executeBkashPayment,
+  refundBkashPayment,
 } from './providers/bkash.provider';
 import type { InitiatePaymentInput } from './payment.schema';
 
@@ -257,4 +262,90 @@ export const handleBkashCallback = async (
 
   await markFailed(payment.id, metadata);
   return { status: 'failed', orderId: payment.orderId, paymentId: payment.id };
+};
+
+/**
+ * Refunds a paid order (admin only — enforced by route middleware).
+ *
+ * Refunds the order's succeeded payment through its original provider, then in
+ * one transaction marks the payment REFUNDED, the order REFUNDED, and returns
+ * every unit to stock — the mirror image of checkout, which decremented it.
+ *
+ * Only PAID or FULFILLED orders can be refunded, and an order already REFUNDED
+ * is rejected, so the money movement and the restock happen exactly once.
+ */
+export const refundOrder = async (
+  orderId: string,
+): Promise<OrderWithRelations> => {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { items: true, payments: true },
+  });
+  if (!order) {
+    throw AppError.notFound('Order not found');
+  }
+
+  if (order.status === OrderStatus.REFUNDED) {
+    throw AppError.conflict('This order has already been refunded');
+  }
+  if (
+    order.status !== OrderStatus.PAID &&
+    order.status !== OrderStatus.FULFILLED
+  ) {
+    throw AppError.conflict(
+      `Only a paid order can be refunded (its status is ${order.status})`,
+    );
+  }
+
+  const payment = order.payments.find(
+    (p) => p.status === PaymentStatus.SUCCEEDED,
+  );
+  if (!payment || !payment.providerRef) {
+    throw AppError.conflict('No successful payment to refund for this order');
+  }
+
+  // Ask the provider to move the money first. If this fails we never touch our
+  // own state, so we never mark an order refunded that the provider did not.
+  let refundRaw: Prisma.InputJsonValue;
+  if (payment.provider === PaymentProvider.STRIPE) {
+    const refund = await refundStripePayment(
+      payment.providerRef,
+      payment.amount,
+    );
+    refundRaw = refund.raw as unknown as Prisma.InputJsonValue;
+  } else {
+    const meta = (payment.metadata ?? {}) as { trxID?: string };
+    if (!meta.trxID) {
+      throw AppError.conflict(
+        'Cannot refund: the bKash transaction id is missing',
+      );
+    }
+    const refund = await refundBkashPayment(
+      payment.providerRef,
+      meta.trxID,
+      payment.amount,
+    );
+    if (!refund.success) {
+      throw AppError.badRequest('bKash refund was not accepted');
+    }
+    refundRaw = refund.raw as Prisma.InputJsonValue;
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.payment.update({
+      where: { id: payment.id },
+      data: { status: PaymentStatus.REFUNDED, metadata: refundRaw },
+    });
+    for (const line of order.items) {
+      await tx.product.update({
+        where: { id: line.productId },
+        data: { stock: { increment: line.quantity } },
+      });
+    }
+    return tx.order.update({
+      where: { id: order.id },
+      data: { status: OrderStatus.REFUNDED },
+      include: { items: true, payments: true },
+    });
+  });
 };

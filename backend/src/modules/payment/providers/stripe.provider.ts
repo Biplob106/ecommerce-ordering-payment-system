@@ -51,6 +51,22 @@ export const createStripePayment = async (
 };
 
 /**
+ * Refunds a captured PaymentIntent in full. Stripe refunds the exact amount by
+ * default; we pass it explicitly so a partial refund is a one-line change later.
+ * Returns the refund id for the audit trail.
+ */
+export const refundStripePayment = async (
+  paymentIntentId: string,
+  amountMinorUnits: number,
+): Promise<{ refundRef: string; raw: Stripe.Refund }> => {
+  const refund = await stripe.refunds.create({
+    payment_intent: paymentIntentId,
+    amount: amountMinorUnits,
+  });
+  return { refundRef: refund.id, raw: refund };
+};
+
+/**
  * Verifies a raw webhook payload against its `Stripe-Signature` header and
  * returns the typed event. Throws if the signature does not match, which the
  * controller turns into a 400 — an unverified webhook is never trusted.
