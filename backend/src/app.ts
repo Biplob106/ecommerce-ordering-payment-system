@@ -42,6 +42,15 @@ export const createApp = (): Application => {
   // gzip responses over ~1 KB.
   app.use(compression());
 
+  // The Stripe webhook must be verified against the EXACT bytes Stripe signed,
+  // so its body is captured raw. This is mounted ahead of the JSON parser on
+  // purpose: once the raw parser has read the body, `express.json` sees the
+  // body as already consumed and skips it. Every other route still gets JSON.
+  app.use(
+    `${env.API_PREFIX}/payments/stripe/webhook`,
+    express.raw({ type: '*/*', limit: '1mb' }),
+  );
+
   // Parse JSON request bodies into `req.body`.
   // The size limit caps how much a single request can force the process to
   // buffer in memory.

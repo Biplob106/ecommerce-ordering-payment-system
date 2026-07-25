@@ -33,6 +33,33 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
+
+  // --- Stripe ---------------------------------------------------------------
+  // Secret key drives server-side calls; the publishable key is handed to the
+  // browser so Stripe.js can confirm the PaymentIntent. The webhook secret
+  // proves an incoming webhook really came from Stripe.
+  STRIPE_SECRET_KEY: z.string().min(1),
+  STRIPE_PUBLISHABLE_KEY: z.string().min(1),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1),
+  STRIPE_CURRENCY: z.string().default('usd'),
+
+  // --- bKash ----------------------------------------------------------------
+  // Tokenized Checkout credentials. BKASH_MOCK swaps live sandbox calls for
+  // deterministic fixtures so the full flow runs before merchant credentials
+  // are approved.
+  BKASH_BASE_URL: z
+    .string()
+    .url()
+    .default('https://tokenized.sandbox.bka.sh/v1.2.0-beta'),
+  BKASH_APP_KEY: z.string().min(1),
+  BKASH_APP_SECRET: z.string().min(1),
+  BKASH_USERNAME: z.string().min(1),
+  BKASH_PASSWORD: z.string().min(1),
+  BKASH_CALLBACK_URL: z.string().url(),
+  BKASH_MOCK: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 const parsed = envSchema.safeParse(process.env);
