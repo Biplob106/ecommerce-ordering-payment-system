@@ -25,6 +25,7 @@ vi.mock('../src/lib/prisma', () => ({ prisma: prismaMock }));
 import {
   createOrder,
   cancelOrder,
+  fulfillOrder,
 } from '../src/modules/order/order.service';
 
 beforeEach(() => {
@@ -163,5 +164,47 @@ describe('cancelOrder', () => {
     await expect(
       cancelOrder('order_1', 'user_1', Role.CUSTOMER),
     ).rejects.toThrow(/only pending orders can be cancelled/i);
+  });
+});
+
+describe('fulfillOrder', () => {
+  it('moves a paid order to fulfilled', async () => {
+    prismaMock.order.findUnique.mockResolvedValue({
+      id: 'order_1',
+      status: OrderStatus.PAID,
+      items: [],
+      payments: [],
+    });
+    prismaMock.order.update.mockResolvedValue({
+      id: 'order_1',
+      status: OrderStatus.FULFILLED,
+    });
+
+    const result = await fulfillOrder('order_1');
+
+    expect(prismaMock.order.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'order_1' },
+        data: { status: OrderStatus.FULFILLED },
+      }),
+    );
+    expect(result.status).toBe(OrderStatus.FULFILLED);
+  });
+
+  it('rejects fulfilling an order that is not paid', async () => {
+    prismaMock.order.findUnique.mockResolvedValue({
+      id: 'order_1',
+      status: OrderStatus.PENDING,
+      items: [],
+      payments: [],
+    });
+    await expect(fulfillOrder('order_1')).rejects.toThrow(
+      /only a paid order can be fulfilled/i,
+    );
+  });
+
+  it('rejects fulfilling an unknown order', async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    await expect(fulfillOrder('nope')).rejects.toThrow(/order not found/i);
   });
 });

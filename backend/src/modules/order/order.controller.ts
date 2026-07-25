@@ -40,3 +40,9 @@ export const cancel = async (req: Request, res: Response): Promise<void> => {
   );
   res.status(200).json({ success: true, data: { order } });
 };
+
+/** Admin-only. Marks a paid order fulfilled. */
+export const fulfill = async (req: Request, res: Response): Promise<void> => {
+  const order = await orderService.fulfillOrder(req.params.id as string);
+  res.status(200).json({ success: true, data: { order } });
+};

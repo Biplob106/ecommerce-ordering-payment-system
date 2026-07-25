@@ -109,6 +109,37 @@ export const createOrder = async (
   });
 };
 
+/**
+ * Marks a paid order as fulfilled (admin only — enforced by route middleware).
+ *
+ * Fulfilment is the shipped/handed-over milestone, so only a PAID order can
+ * make the move. An unpaid, cancelled, refunded or already-fulfilled order is
+ * rejected, keeping the status a strict PENDING -> PAID -> FULFILLED line.
+ */
+export const fulfillOrder = async (
+  orderId: string,
+): Promise<OrderWithRelations> => {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: orderInclude,
+  });
+  if (!order) {
+    throw AppError.notFound('Order not found');
+  }
+
+  if (order.status !== OrderStatus.PAID) {
+    throw AppError.conflict(
+      `Only a paid order can be fulfilled (its status is ${order.status})`,
+    );
+  }
+
+  return prisma.order.update({
+    where: { id: order.id },
+    data: { status: OrderStatus.FULFILLED },
+    include: orderInclude,
+  });
+};
+
 export const listOrders = async (
   userId: string,
   role: Role,
